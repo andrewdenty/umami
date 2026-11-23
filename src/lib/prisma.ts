@@ -877,8 +877,29 @@ export function getSchema() {
   return connectionUrl.searchParams.get('schema');
 }
 
+// Gay Places: on port 5432 Supabase's pooler reserves one of only 15 connections
+// for each client, which Umami on Vercel runs out of. Port 6543 on the same host
+// shares connections between requests instead. The build's migration step
+// (scripts/check-db.js) reads DATABASE_URL itself, so it keeps using 5432.
+function usePooledPort(databaseUrl?: string) {
+  if (!databaseUrl) return databaseUrl;
+
+  try {
+    const parsed = new URL(databaseUrl);
+
+    if (parsed.hostname.endsWith('.pooler.supabase.com') && parsed.port === '5432') {
+      parsed.port = '6543';
+      return parsed.toString();
+    }
+  } catch {
+    // Leave anything unparseable for the checks below to report.
+  }
+
+  return databaseUrl;
+}
+
 function getClient() {
-  const url = process.env.DATABASE_URL;
+  const url = usePooledPort(process.env.DATABASE_URL);
   const replicaUrl = process.env.DATABASE_REPLICA_URL;
   const logQuery = process.env.LOG_QUERY;
 
